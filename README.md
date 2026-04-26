@@ -2,6 +2,8 @@
 
 Web interface for `yt-dlp`. Downloads YouTube videos to mp4.
 
+![screenshot](img/screenshot.png)
+
 ## Installation & Setup
 
 ### 1. Prerequisites
