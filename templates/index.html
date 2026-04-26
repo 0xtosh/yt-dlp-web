@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>YouTube Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Bungee+Inline&family=Space+Grotesk:wght@400;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            background: url('/bender.jpg') no-repeat center center fixed;
+            background-size: cover;
+            font-family: 'Space Grotesk', sans-serif;
+            background-color: #000;
+        }
+
+        .futurama-title {
+            font-family: 'Bungee Inline', cursive;
+            font-size: 3.5rem;
+            color: #fbbf24;
+            text-transform: uppercase;
+            font-style: italic;
+            line-height: 1.1;
+            text-shadow: 
+                2px 2px 0px #1e40af, 
+                4px 4px 0px #1e40af, 
+                6px 6px 0px #1e3a8a, 
+                8px 8px 15px rgba(0,0,0,0.8);
+            letter-spacing: -1px;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(10px);
+            border: 3px solid #38bdf8;
+            box-shadow: 0 0 25px rgba(56, 189, 248, 0.4);
+        }
+
+        .bender-btn {
+            background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+            border-bottom: 5px solid #92400e;
+            color: #000;
+            transition: all 0.1s;
+        }
+
+        .bender-btn:active {
+            border-bottom: 0px;
+            transform: translateY(5px);
+        }
+    </style>
+</head>
+<body class="text-white p-4 md:p-12">
+    <div class="max-w-4xl mx-auto">
+        
+        <div class="flex flex-col items-center mb-10 text-center">
+            <h1 class="futurama-title mb-4">YouTube<br>Video Downloader</h1>
+            <div class="bg-blue-600 text-white px-4 py-1 rounded font-bold uppercase tracking-widest text-xs italic border-2 border-white/20">
+                A Division of Planet Express
+            </div>
+        </div>
+
+        <div class="glass-panel p-8 rounded-3xl mb-8">
+            <div class="flex flex-col md:flex-row gap-4">
+                <input id="url" type="text" placeholder="Paste URL, meatbag!" 
+                       class="flex-1 bg-slate-900 border-2 border-blue-500/50 p-4 rounded-xl focus:border-yellow-400 outline-none text-lg font-bold">
+                <button onclick="startDownload()" class="bender-btn px-10 py-4 rounded-xl font-black text-2xl uppercase italic">
+                    BEND IT!
+                </button>
+            </div>
+            <div id="status-msg" class="mt-4 text-center font-bold italic text-yellow-400 h-6"></div>
+        </div>
+
+        <div id="progress-card" class="hidden glass-panel p-6 rounded-3xl mb-8 border-yellow-500">
+            <div class="flex justify-between items-end mb-4">
+                <div class="w-2/3">
+                    <p id="file-name" class="text-xs text-blue-300 truncate mb-1 uppercase font-bold"></p>
+                    <p id="speed-eta" class="text-xl font-black text-yellow-400 italic"></p>
+                </div>
+                <div id="percent-text" class="text-5xl font-black italic">0%</div>
+            </div>
+            <div class="h-8 w-full bg-slate-800 rounded-full border-4 border-blue-500 overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]">
+                <div id="progress-bar" class="h-full bg-gradient-to-r from-blue-600 via-cyan-400 to-blue-600 transition-all duration-300" style="width: 0%"></div>
+            </div>
+        </div>
+
+        <div class="glass-panel p-6 rounded-3xl">
+            <h2 class="text-2xl font-bold mb-6 text-blue-400 italic uppercase underline decoration-yellow-500 underline-offset-8">Inventory of Stolen Goods</h2>
+            <div id="file-list" class="grid gap-4"></div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        function startDownload() {
+            const url = document.getElementById('url').value;
+            if (!url) return;
+            socket.emit('start_download', {url: url});
+            document.getElementById('progress-card').classList.remove('hidden');
+        }
+
+        socket.on('progress', (data) => {
+            // Fix for the "undefined" bug: Use logical OR (||) for defaults
+            const percentage = data.percentage || '0';
+            const speed = data.speed || '---';
+            const eta = data.eta || '---';
+            const filename = data.filename || 'Processing...';
+
+            document.getElementById('progress-bar').style.width = percentage + '%';
+            document.getElementById('percent-text').innerText = Math.round(percentage) + '%';
+            document.getElementById('file-name').innerText = filename;
+            document.getElementById('speed-eta').innerText = `${speed} | ETA: ${eta}`;
+            
+            if(data.status === 'finished') {
+                setTimeout(() => {
+                    document.getElementById('progress-card').classList.add('hidden');
+                    loadFiles();
+                }, 4000); // 4 second delay to let the user see the "Complete" status
+            }
+        });
+
+        socket.on('refresh_list', () => loadFiles());
+
+        socket.on('status_msg', (data) => {
+            document.getElementById('status-msg').innerText = data.msg;
+        });
+
+        async function loadFiles() {
+            const res = await fetch('/files');
+            const files = await res.json();
+            const list = document.getElementById('file-list');
+            list.innerHTML = files.length ? '' : '<p class="text-slate-400 italic">No files to loot.</p>';
+            files.forEach(file => {
+                list.innerHTML += `
+                    <div class="flex flex-col md:flex-row items-center justify-between bg-black/60 p-4 rounded-2xl border border-blue-900/50">
+                        <span class="text-sm font-bold truncate w-full md:w-1/2 mb-3 md:mb-0 text-blue-100">${file}</span>
+                        <div class="flex gap-3 w-full md:w-auto">
+                            <a href="/download-file/${encodeURIComponent(file)}" class="flex-1 text-center bg-blue-700 hover:bg-blue-500 text-white text-xs font-black py-3 px-6 rounded-lg uppercase italic border-b-4 border-blue-900">Grab It</a>
+                            <button onclick="deleteFile('${file}')" class="flex-1 bg-red-800 hover:bg-red-600 text-white text-xs font-black py-3 px-6 rounded-lg uppercase italic border-b-4 border-red-950">Eject</button>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        async function deleteFile(name) {
+            if (confirm('Delete this from the manifest?')) {
+                await fetch(`/delete-file/${encodeURIComponent(name)}`);
+                loadFiles();
+            }
+        }
+
+        loadFiles();
+    </script>
+</body>
+</html>
